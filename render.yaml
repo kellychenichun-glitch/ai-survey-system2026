@@ -1,64 +1,34 @@
 services:
-  # PostgreSQL 資料庫
-  - type: pserv
-    name: ai-survey-postgres
-    env: docker
-    plan: free
-    dockerfilePath: ./Dockerfile.db
-    envVars:
-      - key: POSTGRES_USER
-        value: postgres
-      - key: POSTGRES_PASSWORD
-        generateValue: true
-      - key: POSTGRES_DB
-        value: ai_survey_system
-
-  # Redis 快取
-  - type: redis
-    name: ai-survey-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-
   # API 服務
   - type: web
     name: ai-survey-api
-    env: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: ./apps/api
-    plan: free
-    healthCheckPath: /api/v1/health
+    runtime: docker
+    repo: https://github.com/kellychenichun-glitch/ai-survey-system2026
+    branch: main
+    dockerfilePath: ./apps/api/Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3000
-      - key: DATABASE_HOST
-        fromService:
-          type: pserv
+      - key: DATABASE_URL
+        fromDatabase:
           name: ai-survey-postgres
-          property: host
-      - key: DATABASE_PORT
-        value: 5432
-      - key: DATABASE_USER
-        value: postgres
-      - key: DATABASE_PASSWORD
+          property: connectionString
+      - key: REDIS_URL
         fromService:
-          type: pserv
-          name: ai-survey-postgres
-          envVarKey: POSTGRES_PASSWORD
-      - key: DATABASE_NAME
-        value: ai_survey_system
-      - key: REDIS_HOST
-        fromService:
-          type: redis
           name: ai-survey-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
           type: redis
-          name: ai-survey-redis
-          property: port
-      - key: JWT_SECRET
-        generateValue: true
+          property: connectionString
       - key: CLAUDE_API_KEY
         sync: false
+
+databases:
+  # PostgreSQL 資料庫
+  - name: ai-survey-postgres
+    databaseName: aisurvey
+    user: aisurvey
+    plan: free
+
+  # Redis 快取
+  - name: ai-survey-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
