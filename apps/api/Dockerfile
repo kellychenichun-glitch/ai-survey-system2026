@@ -2,17 +2,20 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# 複製 package.json
+# 複製 package files
 COPY package*.json ./
 
-# 使用 npm install 而不是 npm ci
-RUN npm install --production
+# 安裝所有依賴（包括 devDependencies，因為需要編譯）
+RUN npm install
 
-# 複製應用程式代碼
+# 複製源代碼
 COPY . .
+
+# 編譯 TypeScript
+RUN npm run build
 
 # 暴露端口
 EXPOSE 3000
 
 # 啟動應用
-CMD ["npm", "start"]
+CMD ["npm", "run", "start:prod"]
