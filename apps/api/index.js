@@ -52,7 +52,7 @@ app.post('/api/surveys/generate', async (req, res) => {
       });
     }
 
-    console.log(\`生成 AI 問卷: 主題=\${topic}, 題數=\${questionCount}, 語言=\${language}\`);
+    console.log('生成 AI 問卷: 主題=' + topic + ', 題數=' + questionCount + ', 語言=' + language);
     
     // 呼叫 AI 服務生成問卷
     const surveyData = await generateSurvey(topic, questionCount, language);
@@ -255,5 +255,5 @@ app.get('/api/surveys/:id/questions', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(\`AI Survey API 運行於 port \${PORT}\`);
+  console.log('AI Survey API 運行於 port ' + PORT);
 });
