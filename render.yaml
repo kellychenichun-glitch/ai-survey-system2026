@@ -6,6 +6,7 @@ services:
     repo: https://github.com/kellychenichun-glitch/ai-survey-system2026
     branch: main
     dockerfilePath: ./apps/api/Dockerfile
+    plan: free
     envVars:
       - key: NODE_ENV
         value: production
