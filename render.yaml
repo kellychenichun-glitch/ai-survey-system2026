@@ -13,11 +13,6 @@ services:
         fromDatabase:
           name: ai-survey-postgres
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: ai-survey-redis
-          type: redis
-          property: connectionString
       - key: CLAUDE_API_KEY
         sync: false
 
@@ -27,8 +22,3 @@ databases:
     databaseName: aisurvey
     user: aisurvey
     plan: free
-
-  # Redis 快取
-  - name: ai-survey-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
