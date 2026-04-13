@@ -1,35 +1,20 @@
-# Build stage
-FROM node:18-alpine AS builder
+# 使用 Node.js 18 Alpine 作為基礎映像
+FROM node:18-alpine
 
+# 設定工作目錄
 WORKDIR /app
 
-# 複製 package files
+# 複製 package.json
 COPY package*.json ./
 
 # 安裝依賴
 RUN npm ci --only=production
 
-# 複製源碼
+# 複製應用程式代碼
 COPY . .
-
-# 建置
-RUN npm run build
-
-# Production stage
-FROM node:18-alpine
-
-WORKDIR /app
-
-# 複製依賴和建置結果
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-
-# 複製資料庫相關檔案
-COPY src/database ./src/database
 
 # 暴露端口
 EXPOSE 3000
 
-# 啟動命令
-CMD ["sh", "-c", "npx typeorm migration:run -d src/database/data-source.ts && node dist/main.js"]
+# 啟動應用
+CMD ["npm", "start"]
