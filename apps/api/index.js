@@ -70,7 +70,7 @@ app.post('/api/surveys/generate', async (req, res) => {
       const q = surveyData.questions[i];
       await pool.query(
         'INSERT INTO questions (survey_id, question_text, question_type, options, order_num) VALUES ($1, $2, $3, $4, $5)',
-        [survey.id, q.question, q.type, JSON.stringify(q.options || []), i + 1]
+        [survey.id, q.text, q.type, JSON.stringify(q.options || []), i + 1]
       );
     }
     
