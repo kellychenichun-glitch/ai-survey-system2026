@@ -361,6 +361,35 @@ app.post('/api/v1/surveys/:id/responses', async (req, res) => {
   } catch (e) { err(res, e.message); }
 });
 
+
+// ── GET responses list ─────────────────────────────
+app.get('/api/v1/surveys/:id/responses', async (req, res) => {
+  try {
+    const { rows: sv } = await pool.query('SELECT * FROM surveys WHERE id=$1', [req.params.id]);
+    if (!sv.length) return err(res, '找不到問卷', 404);
+    const { rows } = await pool.query(
+      `SELECT id, respondent_email, duration_seconds, status, created_at, answers
+       FROM responses WHERE survey_id=$1 ORDER BY created_at DESC`,
+      [req.params.id]
+    );
+    ok(res, { responses: rows, total: rows.length });
+  } catch (e) { err(res, e.message); }
+});
+
+// ── GET responses trend ────────────────────────────
+app.get('/api/v1/surveys/:id/responses/trend', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DATE(created_at) as date, COUNT(*)::int as count
+       FROM responses WHERE survey_id=$1
+         AND created_at > NOW() - INTERVAL '30 days'
+       GROUP BY DATE(created_at) ORDER BY date ASC`,
+      [req.params.id]
+    );
+    ok(res, { trend: rows });
+  } catch (e) { err(res, e.message); }
+});
+
 // ═══════════════════════════════════════════════════
 //  STATS — 統計分析
 // ═══════════════════════════════════════════════════
