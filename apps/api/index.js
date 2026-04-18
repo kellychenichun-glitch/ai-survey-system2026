@@ -380,7 +380,7 @@ app.get('/api/v1/surveys/:id/responses', async (req, res) => {
 app.get('/api/v1/surveys/:id/responses/trend', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT DATE(created_at) as date, COUNT(*)::int as count
+      `SELECT TO_CHAR(DATE(created_at), 'MM-DD') as date, COUNT(*)::int as count
        FROM responses WHERE survey_id=$1
          AND created_at > NOW() - INTERVAL '30 days'
        GROUP BY DATE(created_at) ORDER BY date ASC`,
