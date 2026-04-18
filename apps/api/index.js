@@ -78,6 +78,32 @@ async function migrate() {
       )
     `);
 
+
+    // ── Knowledge Base tables ─────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS knowledge_bases (
+        id          SERIAL PRIMARY KEY,
+        name        VARCHAR(255) NOT NULL,
+        description TEXT DEFAULT '',
+        status      VARCHAR(20) DEFAULT 'active',
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS knowledge_items (
+        id         SERIAL PRIMARY KEY,
+        kb_id      INTEGER REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+        question   TEXT NOT NULL,
+        answer     TEXT NOT NULL,
+        source     VARCHAR(255) DEFAULT '',
+        tags       TEXT[] DEFAULT '{}',
+        enabled    BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_ki_kb ON knowledge_items(kb_id)`);
+
     console.log('✅ Migration done');
   } finally {
     client.release();
@@ -576,6 +602,114 @@ app.post('/api/chat', async (req, res) => {
       conversationHistory: [...messages, { role: 'assistant', content: response.content[0].text }],
     });
   } catch (e) { err(res, e.message); }
+});
+
+
+// ═══════════════════════════════════════════════════
+//  KNOWLEDGE BASE
+// ═══════════════════════════════════════════════════
+
+app.get('/api/v1/kb', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT kb.*, COUNT(ki.id)::int as item_count
+       FROM knowledge_bases kb
+       LEFT JOIN knowledge_items ki ON ki.kb_id = kb.id AND ki.enabled = true
+       GROUP BY kb.id ORDER BY kb.created_at DESC`
+    );
+    ok(res, { kbs: rows });
+  } catch(e) { err(res, e.message); }
+});
+
+app.post('/api/v1/kb', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) return err(res, '請填寫知識庫名稱', 400);
+    const { rows } = await pool.query(
+      `INSERT INTO knowledge_bases(name, description) VALUES($1,$2) RETURNING *`,
+      [name, description || '']
+    );
+    ok(res, { kb: rows[0] }, 201);
+  } catch(e) { err(res, e.message); }
+});
+
+app.delete('/api/v1/kb/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM knowledge_bases WHERE id=$1`, [req.params.id]);
+    ok(res, { deleted: req.params.id });
+  } catch(e) { err(res, e.message); }
+});
+
+app.get('/api/v1/kb/:id/items', async (req, res) => {
+  try {
+    const { q } = req.query;
+    let query = `SELECT * FROM knowledge_items WHERE kb_id=$1`;
+    const params = [req.params.id];
+    if (q) { query += ` AND (question ILIKE $2 OR answer ILIKE $2)`; params.push(`%${q}%`); }
+    query += ` ORDER BY created_at DESC`;
+    const { rows } = await pool.query(query, params);
+    ok(res, { items: rows, total: rows.length });
+  } catch(e) { err(res, e.message); }
+});
+
+app.post('/api/v1/kb/:id/items', async (req, res) => {
+  try {
+    const { question, answer, source, tags } = req.body;
+    if (!question || !answer) return err(res, '問題和答案為必填', 400);
+    const { rows } = await pool.query(
+      `INSERT INTO knowledge_items(kb_id, question, answer, source, tags)
+       VALUES($1,$2,$3,$4,$5) RETURNING *`,
+      [req.params.id, question, answer, source || '', tags || []]
+    );
+    ok(res, { item: rows[0] }, 201);
+  } catch(e) { err(res, e.message); }
+});
+
+app.put('/api/v1/kb/:kbId/items/:id', async (req, res) => {
+  try {
+    const { question, answer, source, tags, enabled } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE knowledge_items SET
+         question=COALESCE($1,question), answer=COALESCE($2,answer),
+         source=COALESCE($3,source), tags=COALESCE($4,tags),
+         enabled=COALESCE($5,enabled), updated_at=NOW()
+       WHERE id=$6 AND kb_id=$7 RETURNING *`,
+      [question, answer, source, tags, enabled, req.params.id, req.params.kbId]
+    );
+    if (!rows.length) return err(res, '找不到條目', 404);
+    ok(res, { item: rows[0] });
+  } catch(e) { err(res, e.message); }
+});
+
+app.delete('/api/v1/kb/:kbId/items/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM knowledge_items WHERE id=$1 AND kb_id=$2`, [req.params.id, req.params.kbId]);
+    ok(res, { deleted: req.params.id });
+  } catch(e) { err(res, e.message); }
+});
+
+app.post('/api/v1/kb/:id/search', async (req, res) => {
+  try {
+    const { query: q, limit = 5 } = req.body;
+    if (!q) return err(res, 'query 必填', 400);
+    // Full-text search first
+    const { rows } = await pool.query(
+      `SELECT *, ts_rank(to_tsvector('simple', question || ' ' || answer),
+         plainto_tsquery('simple', $2)) as score
+       FROM knowledge_items WHERE kb_id=$1 AND enabled=true
+         AND to_tsvector('simple', question || ' ' || answer) @@ plainto_tsquery('simple', $2)
+       ORDER BY score DESC LIMIT $3`,
+      [req.params.id, q, limit]
+    );
+    if (rows.length) return ok(res, { results: rows, method: 'fulltext' });
+    // Fallback ILIKE
+    const { rows: fb } = await pool.query(
+      `SELECT * FROM knowledge_items WHERE kb_id=$1 AND enabled=true
+       AND (question ILIKE $2 OR answer ILIKE $2) LIMIT $3`,
+      [req.params.id, `%${q}%`, limit]
+    );
+    ok(res, { results: fb, method: 'ilike' });
+  } catch(e) { err(res, e.message); }
 });
 
 // ── 啟動 ─────────────────────────────────────────────
