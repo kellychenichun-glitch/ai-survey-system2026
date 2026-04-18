@@ -57,6 +57,15 @@ async function migrate() {
     }
 
     // responses 填答記錄
+    // 補 responses 缺少欄位（若表已存在但缺欄位）
+    const alterResp = [
+      `ALTER TABLE responses ADD COLUMN IF NOT EXISTS answers          JSONB DEFAULT '[]'`,
+      `ALTER TABLE responses ADD COLUMN IF NOT EXISTS respondent_email VARCHAR(255)`,
+      `ALTER TABLE responses ADD COLUMN IF NOT EXISTS duration_seconds INTEGER DEFAULT 0`,
+      `ALTER TABLE responses ADD COLUMN IF NOT EXISTS status           VARCHAR(20) DEFAULT 'completed'`,
+    ];
+    for (const sql of alterResp) await client.query(sql).catch(() => {});
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS responses (
         id               SERIAL PRIMARY KEY,
